@@ -60,10 +60,14 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
   const [profileData, setProfileData] = useState<ProfileFormState>(() => getInitialProfile(currentUser));
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Sync state during render if currentUser changes dynamically without unmounting
+  const [prevUser, setPrevUser] = useState(currentUser);
+  if (prevUser !== currentUser) {
+    setPrevUser(currentUser);
     setProfileData(getInitialProfile(currentUser));
-  }, [currentUser]);
+  }
 
+  // Properly structured useEffect for cleaning up object URLs
   useEffect(() => {
     return () => {
       if (profileImage?.startsWith("blob:")) {
@@ -110,7 +114,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
       {/* Main Profile Content Container */}
       <div className="flex-1 space-y-6">
         
-        {/* User Identity Banner Card (With Edit Button Moved Inside) */}
+        {/* User Identity Banner Card */}
         <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-[#106fb8] to-sky-400" />
 
@@ -209,9 +213,8 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
 
         {/* 2-Column Grid Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* LEFT: About & Contact Information (8 Columns) */}
+          {/* LEFT: About & Contact Information */}
           <div className="lg:col-span-8 space-y-6">
-            {/* About Me */}
             <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div>
@@ -236,7 +239,6 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               )}
             </div>
 
-            {/* Contact Information */}
             <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-4">
               <div className="border-b border-slate-100 pb-3">
                 <h3 className="text-base font-bold text-slate-800">Contact Information</h3>
@@ -277,7 +279,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
             </div>
           </div>
 
-          {/* RIGHT: Performance Snapshot Sidebar (4 Columns) */}
+          {/* RIGHT: Performance Snapshot Sidebar */}
           <div className="lg:col-span-4 space-y-6">
             <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm space-y-5">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
