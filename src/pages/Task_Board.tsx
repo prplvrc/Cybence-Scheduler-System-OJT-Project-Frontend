@@ -15,30 +15,25 @@ import {
   FileText,
 } from "lucide-react";
 import NewTaskModal from "./New_Task";
+import { getTasks, updateTask, createTask as createTaskApi } from "../api/task.api";
 import type { NewTaskFormData } from "./New_Task";
 import "./Task_Board.css";
 
 export interface Task {
   id: number;
-
   title: string;
   description: string | null;
-
   status: string;
   priority: string;
-
   dueDate: string | null;
   createdAt: string;
-
   createdBy: number;
   assignedTo: number | null;
-
   creator: {
     id: number;
     name: string;
     email: string;
   };
-
   assignee: {
     id: number;
     name: string;
@@ -66,10 +61,10 @@ type TaskBoardProps = {
   highlightTaskId?: number | null;
   onHighlightHandled?: () => void;
   currentUser?: {
-  id: number;
-  name: string;
-  role?: string;
-};
+    id: number;
+    name: string;
+    role?: string;
+  };
 };
 
 const PRIORITIES = ["Low", "Medium", "High", "Critical"];
@@ -81,8 +76,12 @@ function getEffectiveStatus(task: Task): string {
     return "Completed";
   }
 
-  if (task.assignedTo === null) {
+  if (task.assignedTo == null) {
     return "To Be Assigned";
+  }
+
+  if (task.status === "To Be Assigned" || task.status === "Pending") {
+    return "To Do";
   }
 
   if (task.dueDate) {
@@ -135,11 +134,14 @@ const buildTaskGroups = (tasks: Task[]): TaskGroup[] => {
   };
 
   tasks.forEach((task) => {
+    if (task.assignedTo == null) {
+      groupMap["To Be Assigned"].tasks.push(task);
+      return;
+    }
+
     const effectiveStatus = getEffectiveStatus(task);
     if (groupMap[effectiveStatus]) {
       groupMap[effectiveStatus].tasks.push(task);
-    } else {
-      groupMap["To Be Assigned"].tasks.push(task);
     }
   });
 
@@ -163,6 +165,29 @@ export default function TaskBoard({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  // Prevent double submissions
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadTasks = async () => {
+      try {
+        const response = await getTasks();
+        if (isMounted) {
+          onTasksChange(response.tasks || []);
+        }
+      } catch (error) {
+        console.error("Error loading tasks:", error);
+      }
+    };
+
+    loadTasks();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!highlightTaskId) return;
@@ -205,14 +230,19 @@ export default function TaskBoard({
     filter.priorities.length > 0 || filter.statuses.length > 0 || filter.sort !== "desc";
 
   const filteredTasks = useMemo(() => {
-    let result = [...tasks];
+    // Deduplicate incoming tasks by ID to prevent repeated UI rows
+    const uniqueTasks = Array.from(
+      new Map(tasks.map((task) => [task.id, task])).values()
+    );
+
+    let result = [...uniqueTasks];
 
     if (filter.search.trim()) {
       const q = filter.search.toLowerCase();
       result = result.filter(
         (t) =>
           t.title.toLowerCase().includes(q) ||
-          t.creator.name.toLowerCase().includes(q) ||
+          t.creator?.name.toLowerCase().includes(q) ||
           t.assignee?.name.toLowerCase().includes(q)
       );
     }
@@ -239,121 +269,71 @@ export default function TaskBoard({
   const taskGroups = buildTaskGroups(filteredTasks);
 
   const handleCreateTask = async (taskData: NewTaskFormData) => {
-    const isOpenForAnyone = taskData.assignTo === "Open for anyone to take";
-    const initialStatus = isOpenForAnyone ? "To Be Assigned" : "To Do";
+    if (isSubmitting) return; // Prevent double trigger
+    setIsSubmitting(true);
 
     try {
-      const response = await fetch("/api/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          task: taskData.title,
-          description: taskData.description || "",
-          creator: currentUser?.name || "You",
-          assignedTo: isOpenForAnyone ? "Open" : taskData.assignTo,
-          status: taskData.status || initialStatus,
-          dueDate: taskData.dueDate || new Date().toISOString().split("T")[0],
-          priority: taskData.priority || "Medium",
-        }),
+      const isOpenForAnyone = taskData.assignTo === "Open for anyone to take";
+
+      await createTaskApi({
+        title: taskData.title,
+        description: taskData.description,
+        status: isOpenForAnyone ? "To Be Assigned" : (taskData.status || "To Do"),
+        priority: taskData.priority || "Medium",
+        dueDate: taskData.dueDate || null,
+        assignedTo: isOpenForAnyone ? null : Number(taskData.assignTo),
       });
 
-      if (response.ok) {
-        const createdTask: Task = await response.json();
-        onTasksChange([...tasks, createdTask]);
-      }
+      const response = await getTasks();
+      onTasksChange(response.tasks || []);
+      setIsModalOpen(false);
     } catch (err) {
       console.error("Error creating task:", err);
+      alert("Failed to create task.");
     } finally {
-      setIsModalOpen(false);
+      setIsSubmitting(false);
     }
   };
 
-const handleUpdateTaskStatus = async (
-  taskId: number,
-  newStatus: string
-) => {
-  try {
-    const response = await fetch(`/api/tasks/${taskId}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        status: newStatus,
-      }),
-    });
+  const handleUpdateTaskStatus = async (taskId: number, newStatus: string) => {
+    try {
+      await updateTask(taskId, { status: newStatus });
+      const response = await getTasks();
+      onTasksChange(response.tasks || []);
+      
+      if (selectedTask && selectedTask.id === taskId) {
+        const updated = response.tasks.find((t: Task) => t.id === taskId);
+        if (updated) setSelectedTask(updated);
+      }
+    } catch (error) {
+      console.error("Error updating task status:", error);
+      alert("Failed to update task status.");
+    }
+  };
 
-    if (!response.ok) {
-      throw new Error("Failed to update task status");
+  const handleTakeTask = async (taskId: number) => {
+    if (!currentUser?.id) {
+      alert("You must be logged in to take a task.");
+      return;
     }
 
-    const updatedTasks = tasks.map((task) =>
-      task.id === taskId
-        ? {
-            ...task,
-            status: newStatus,
-          }
-        : task
-    );
+    try {
+      await updateTask(taskId, {
+        assignedTo: currentUser.id,
+        status: "To Do"
+      });
 
-    onTasksChange(updatedTasks);
-
-    if (selectedTask?.id === taskId) {
-      setSelectedTask((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: newStatus,
-            }
-          : null
-      );
+      const response = await getTasks();
+      onTasksChange(response.tasks || []);
+      setSelectedTask(null);
+    } catch (error) {
+      console.error("Error taking task:", error);
+      alert("Failed to take task.");
     }
-  } catch (error) {
-    console.error("Error updating task status:", error);
-  }
-};
-
-const handleTakeTask = async (taskId: number) => {
-  if (!currentUser) return;
-
-  try {
-    const response = await fetch(`/api/tasks/${taskId}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        assignedTo: Number(currentUser.id),
-        status: "To Do",
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to take task");
-    }
-
-    const data = await response.json();
-
-    const updatedTask: Task = data.task;
-
-    onTasksChange(
-      tasks.map((task) =>
-        task.id === taskId ? updatedTask : task
-      )
-    );
-
-    if (selectedTask?.id === taskId) {
-      setSelectedTask(updatedTask);
-    }
-
-  } catch (error) {
-    console.error("Error claiming task:", error);
-  }
-};
+  };
 
   return (
     <div className="task-board-view">
-      {/* Header Section */}
       <header className="page-header">
         <div className="title-group">
           <h1>Tasks</h1>
@@ -373,7 +353,6 @@ const handleTakeTask = async (taskId: number) => {
         </div>
       </header>
 
-      {/* Toolbar Section */}
       <div className="toolbar-section">
         <div className="filter-controls">
           <button
@@ -412,7 +391,6 @@ const handleTakeTask = async (taskId: number) => {
         </div>
       </div>
 
-      {/* Accordion List Sections */}
       <div className="sections-container">
         {taskGroups.map((group) => (
           <TaskSection
@@ -426,7 +404,6 @@ const handleTakeTask = async (taskId: number) => {
         ))}
       </div>
 
-      {/* Filter Modal Overlay */}
       {showFilterModal && (
         <FilterModal
           filter={filter}
@@ -435,7 +412,6 @@ const handleTakeTask = async (taskId: number) => {
         />
       )}
 
-      {/* Task Details Modal Popup */}
       {selectedTask && (
         <TaskDetailsModal
           task={selectedTask}
@@ -445,7 +421,6 @@ const handleTakeTask = async (taskId: number) => {
         />
       )}
 
-      {/* New Task Modal Popup */}
       <NewTaskModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -514,12 +489,8 @@ function TaskDetailsModal({
           <div className="flex items-center gap-3 p-3 bg-slate-50/80 rounded-xl border border-slate-100">
             <User className="w-4 h-4 text-[#106fb8]" />
             <div>
-              <p className="text-xs text-slate-400 font-medium">
-                Created By
-              </p>
-              <p className="font-semibold text-slate-800">
-                {task.creator.name}
-              </p>
+              <p className="text-xs text-slate-400 font-medium">Created By</p>
+              <p className="font-semibold text-slate-800">{task.creator?.name || "Unknown"}</p>
             </div>
           </div>
 
@@ -527,9 +498,7 @@ function TaskDetailsModal({
             <div className="flex items-center gap-3 p-3 bg-slate-50/80 rounded-xl border border-slate-100">
               <UserCheck className="w-4 h-4 text-[#106fb8]" />
               <div>
-                <p className="text-xs text-slate-400 font-medium">
-                  Assigned To
-                </p>
+                <p className="text-xs text-slate-400 font-medium">Assigned To</p>
                 <p className="font-semibold text-slate-800">
                   {task.assignedTo ? task.assignee?.name : "Unassigned"}
                 </p>
@@ -540,9 +509,7 @@ function TaskDetailsModal({
           <div className="flex items-center gap-3 p-3 bg-slate-50/80 rounded-xl border border-slate-100">
             <Tag className="w-4 h-4 text-[#106fb8]" />
             <div>
-              <p className="text-xs text-slate-400 font-medium">
-                Priority
-              </p>
+              <p className="text-xs text-slate-400 font-medium">Priority</p>
               <span
                 className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full mt-0.5 ${
                   task.priority === "High" || task.priority === "Critical"
@@ -558,13 +525,9 @@ function TaskDetailsModal({
           <div className="flex items-center gap-3 p-3 bg-slate-50/80 rounded-xl border border-slate-100">
             <Calendar className="w-4 h-4 text-[#106fb8]" />
             <div>
-              <p className="text-xs text-slate-400 font-medium">
-                Due Date
-              </p>
+              <p className="text-xs text-slate-400 font-medium">Due Date</p>
               <p className="font-semibold text-slate-800">
-                {task.dueDate
-                  ? formatDate(task.dueDate)
-                  : "No due date"}
+                {task.dueDate ? formatDate(task.dueDate) : "No due date"}
               </p>
             </div>
           </div>
@@ -589,30 +552,30 @@ function TaskDetailsModal({
           </div>
         )}
 
-          <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
-            {isUnassigned ? (
-              <button
-                type="button"
-                onClick={() => onTakeTask(task.id)}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#106fb8] px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[#0d5ca0] transition cursor-pointer"
-              >
-                <CheckCircle2 size={16} />
-                Take This Task
-              </button>
-            ) : (
-              <div className="text-xs text-slate-400 font-medium">
-                Assigned to {task.assignedTo ? task.assignee?.name : "Unassigned"}
-              </div>
-            )}
-
+        <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+          {isUnassigned ? (
             <button
               type="button"
-              onClick={onClose}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+              onClick={() => onTakeTask(task.id)}
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#106fb8] px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[#0d5ca0] transition cursor-pointer"
             >
-              Close
+              <CheckCircle2 size={16} />
+              Take This Task
             </button>
-          </div>
+          ) : (
+            <div className="text-xs text-slate-400 font-medium">
+              Assigned to {task.assignedTo ? task.assignee?.name : "Unassigned"}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -796,7 +759,7 @@ function TaskSection({
                   </td>
 
                   <td className="td-cell text-slate-600">
-                    {task.creator.name}
+                    {task.creator?.name || "Unknown"}
                   </td>
 
                   <td className="td-cell text-slate-600">

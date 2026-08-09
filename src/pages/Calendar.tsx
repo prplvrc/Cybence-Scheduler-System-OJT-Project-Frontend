@@ -4,10 +4,18 @@ import "./Calendar.css";
 import NewTaskModal from "./New_Task";
 import type { NewTaskFormData } from "./New_Task";
 import type { Task } from "./Task_Board";
+import { createTask as createTaskApi } from "../api/task.api";
 
 const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const normalizeName = (value: string) => value.trim().toLowerCase();
+const normalizeName = (value: unknown): string => {
+  if (typeof value === "string") return value.trim().toLowerCase();
+  if (value && typeof value === "object" && "name" in value) {
+    const name = (value as { name?: unknown }).name;
+    if (typeof name === "string") return name.trim().toLowerCase();
+  }
+  return "";
+};
 
 type CalendarProps = {
   tasks?: Task[];
@@ -36,12 +44,6 @@ export default function Calendar({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string>("All");
 
-  const upcomingSchedule = [
-    { day: "Today", time: "09:00 AM - Team Sync" },
-    { day: "Tomorrow", time: "02:00 PM - Client Review" },
-    { day: "Friday", time: "11:30 AM - Training Session" },
-  ];
-
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth();
 
@@ -69,47 +71,85 @@ export default function Calendar({
     setSelectedDay(now.getDate());
   };
 
+  // 1. Filter tasks belonging to the user for the active month
   const ownerTasks = tasks.filter((task) => {
     if (!task.dueDate) return false;
     const dueDate = new Date(task.dueDate);
     if (Number.isNaN(dueDate.getTime())) return false;
 
+    const assignedUserName = task.assignee?.name ?? "";
     const isUserTask =
-      normalizeName(task.assignedTo) === normalizeName(currentUserName) &&
-      dueDate.getMonth() === currentMonth &&
-      dueDate.getFullYear() === currentYear;
+      normalizeName(assignedUserName) === normalizeName(currentUserName);
 
-    if (activeFilter === "All") return isUserTask;
-    return isUserTask && task.status === activeFilter;
+    if (!isUserTask) return false;
+
+    if (
+      dueDate.getMonth() !== currentMonth ||
+      dueDate.getFullYear() !== currentYear
+    ) {
+      return false;
+    }
+
+    // Filter View Handling
+    if (activeFilter === "All") return true;
+
+    if (activeFilter === "Pending") {
+      return (
+        task.status === "Pending" ||
+        task.status === "To Do" ||
+        task.status === "To Be Assigned"
+      );
+    }
+
+    return task.status === activeFilter;
   });
 
+  // 2. Selected day tasks
   const selectedDayTasks = ownerTasks.filter((task) => {
-    const dueDate = new Date(task.dueDate);
+    const dueDate = new Date(task.dueDate!);
     return dueDate.getDate() === selectedDay;
   });
 
-  // Calculate Monthly Stats
+  // 3. Dynamic Upcoming Tasks (tasks with due dates starting today or in the future)
+  const upcomingTasks = tasks
+    .filter((task) => {
+      if (!task.dueDate) return false;
+      const dueDate = new Date(task.dueDate);
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+
+      const isUserTask =
+        normalizeName(task.assignee?.name) === normalizeName(currentUserName);
+
+      return isUserTask && dueDate >= startOfToday && task.status !== "Completed";
+    })
+    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
+    .slice(0, 4);
+
+  // Monthly statistics calculation
   const totalMonthTasks = ownerTasks.length;
   const completedMonthTasks = ownerTasks.filter((t) => t.status === "Completed").length;
-  const completionPercentage = totalMonthTasks > 0 ? Math.round((completedMonthTasks / totalMonthTasks) * 100) : 0;
+  const completionPercentage =
+    totalMonthTasks > 0 ? Math.round((completedMonthTasks / totalMonthTasks) * 100) : 0;
 
-  const handleCreateTask = (taskData: NewTaskFormData) => {
-    const newTask: Task = {
-      id: Date.now(),
-      task: taskData.title,
-      creator: "You",
-      assignedTo:
-        taskData.assignTo === "Open for anyone to take"
-          ? "Open"
-          : taskData.assignTo,
-      createdOn: new Date().toISOString().split("T")[0],
-      status: taskData.status || "Pending",
-      dueDate: taskData.dueDate || new Date().toISOString().split("T")[0],
-      priority: taskData.priority || "Medium",
-    };
+  const handleCreateTask = async (taskData: NewTaskFormData) => {
+    try {
+      const isOpenForAnyone = taskData.assignTo === "Open for anyone to take";
 
-    onTasksChange([...tasks, newTask]);
-    setIsModalOpen(false);
+      await createTaskApi({
+        title: taskData.title,
+        description: taskData.description,
+        status: isOpenForAnyone ? "To Be Assigned" : taskData.status || "To Do",
+        priority: taskData.priority || "Medium",
+        dueDate: taskData.dueDate || null,
+        assignedTo: isOpenForAnyone ? null : Number(taskData.assignTo),
+      });
+
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error("Error creating task:", err);
+      alert("Failed to create task.");
+    }
   };
 
   return (
@@ -119,7 +159,7 @@ export default function Calendar({
         <div className="title-group">
           <h1>Calendar</h1>
           <p className="subtitle">
-            Manage schedule, events, and upcoming tasks
+            Track and manage all your assigned tasks across the month
           </p>
         </div>
 
@@ -128,13 +168,13 @@ export default function Calendar({
           onClick={() => setIsModalOpen(true)}
         >
           <Plus size={16} />
-          Add New Event
+          Add New Task
         </button>
       </header>
 
       {/* 2-COLUMN MAIN LAYOUT */}
       <div className="calendar-main-layout">
-        {/* LEFT COLUMN: EXPANDED FULL-HEIGHT CALENDAR */}
+        {/* LEFT COLUMN: CALENDAR GRID */}
         <div className="calendar-card">
           <div className="month-header">
             <h2>
@@ -164,7 +204,6 @@ export default function Calendar({
             </div>
           </div>
 
-          {/* WEEKDAYS HEADER */}
           <div className="weekdays-row">
             {weekdays.map((day) => (
               <div key={day} className="weekday-label">
@@ -173,7 +212,6 @@ export default function Calendar({
             ))}
           </div>
 
-          {/* EXPANDED DAYS GRID */}
           <div className="days-grid">
             {emptyOffset.map((_, index) => (
               <div key={`offset-${index}`} className="day-cell offset" />
@@ -188,7 +226,7 @@ export default function Calendar({
               const isSelected = day === selectedDay;
 
               const dayTasks = ownerTasks.filter(
-                (t) => new Date(t.dueDate).getDate() === day
+                (t) => new Date(t.dueDate!).getDate() === day
               );
 
               return (
@@ -210,7 +248,7 @@ export default function Calendar({
                           t.status === "Completed" ? "pill-done" : "pill-pending"
                         }`}
                       >
-                        {t.task}
+                        {t.title}
                       </span>
                     ))}
                     {dayTasks.length > 2 && (
@@ -222,7 +260,7 @@ export default function Calendar({
             })}
           </div>
 
-          {/* BOTTOM FILTER & LEGEND BAR */}
+          {/* BOTTOM FILTER BAR */}
           <div className="calendar-legend-bar">
             <div className="legend-group">
               <span className="legend-title">
@@ -252,7 +290,7 @@ export default function Calendar({
           </div>
         </div>
 
-        {/* RIGHT COLUMN: STACKED SIDEBAR */}
+        {/* RIGHT COLUMN: SIDEBAR */}
         <aside className="sidebar-container">
           {/* TASKS FOR SELECTED DAY */}
           <div className="side-panel">
@@ -260,7 +298,7 @@ export default function Calendar({
               <h3>
                 Tasks for {monthName} {selectedDay}
               </h3>
-              <p className="panel-subtitle">Scheduled for this date</p>
+              <p className="panel-subtitle">Tasks scheduled on this date</p>
             </div>
 
             <div className="tasks-list">
@@ -268,7 +306,7 @@ export default function Calendar({
                 selectedDayTasks.map((task) => (
                   <div className="task-item-card" key={task.id}>
                     <div className="task-item-top">
-                      <span className="task-name">{task.task}</span>
+                      <span className="task-name">{task.title}</span>
 
                       <span
                         className={`badge ${
@@ -283,9 +321,9 @@ export default function Calendar({
 
                     <div className="task-item-bottom">
                       <span className="assignee">
-                        Assigned to: {task.assignedTo}
+                        Priority: {task.priority}
                       </span>
-                      <span className="time">{formatDate(task.dueDate)}</span>
+                      <span className="time">{formatDate(task.dueDate!)}</span>
                     </div>
                   </div>
                 ))
@@ -299,31 +337,39 @@ export default function Calendar({
             </div>
           </div>
 
-          {/* UPCOMING SCHEDULE SECTION */}
+          {/* DYNAMIC UPCOMING TASKS */}
           <div className="side-panel">
             <div className="panel-header">
-              <h3>Upcoming Schedule</h3>
-              <p className="panel-subtitle">Your next planned activities</p>
+              <h3>Upcoming Tasks</h3>
+              <p className="panel-subtitle">Next pending deliverables</p>
             </div>
 
             <div className="upcoming-list">
-              {upcomingSchedule.map((item) => (
-                <div key={item.day} className="upcoming-item-card">
+              {upcomingTasks.map((task) => (
+                <div key={task.id} className="upcoming-item-card">
                   <div>
-                    <p className="upcoming-day">{item.day}</p>
-                    <p className="upcoming-time">{item.time}</p>
+                    <p className="upcoming-day">{task.title}</p>
+                    <p className="upcoming-time">
+                      Due: {formatDate(task.dueDate!)}
+                    </p>
                   </div>
                   <Clock className="upcoming-icon" />
                 </div>
               ))}
+
+              {upcomingTasks.length === 0 && (
+                <div className="p-3 text-xs text-slate-400">
+                  No upcoming pending tasks found.
+                </div>
+              )}
             </div>
           </div>
 
-          {/* MONTHLY SUMMARY CARD (FILLED BOTTOM DEAD SPACE) */}
+          {/* MONTHLY SUMMARY CARD */}
           <div className="side-panel summary-panel">
             <div className="panel-header">
-              <h3>Monthly Workload</h3>
-              <p className="panel-subtitle">{monthName} progress</p>
+              <h3>Monthly Progress</h3>
+              <p className="panel-subtitle">{monthName} task completion</p>
             </div>
 
             <div className="summary-body">
@@ -348,7 +394,6 @@ export default function Calendar({
         </aside>
       </div>
 
-      {/* NEW TASK MODAL */}
       <NewTaskModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

@@ -40,79 +40,110 @@ export default function Dashboard({
   currentUser,
   auditLogs,
 }: DashboardProps) {
-  const weeklyData = [
-    { day: "Mon", completed: 4, ongoing: 3, created: 2 },
-    { day: "Tue", completed: 2, ongoing: 4, created: 1 },
-    { day: "Wed", completed: 3, ongoing: 1, created: 2 },
-    { day: "Thu", completed: 6, ongoing: 2, created: 0 },
-    { day: "Fri", completed: 5, ongoing: 3, created: 0 },
-    { day: "Sat", completed: 1, ongoing: 0, created: 0 },
-  ];
-
-  const teamMembers = [
-    { name: "Perpaulo", role: "Intern", progress: "80%" },
-    { name: "Daniel", role: "Developer", progress: "65%" },
-    { name: "Mae", role: "Designer", progress: "90%" },
-    { name: "Janina", role: "Manager", progress: "75%" },
-  ];
-
-  const recentTasks = [
-    {
-      id: "1",
-      title: "Scheduler system for Cybence IT Solutions",
-      date: "2026-07-21",
-      status: "Pending",
-    },
-    {
-      id: "2",
-      title: "New payment gateway implementation",
-      date: "2026-07-16",
-      status: "Ongoing",
-    },
-    {
-      id: "3",
-      title: "New user interface implementation",
-      date: "2026-07-19",
-      status: "To Do",
-    },
-  ];
-
+  // 1. STATE DECLARATIONS FIRST (Fixes initialization errors)
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTab, setActiveTab] = useState("dashboard");
-
-  const currentTab = highlightedTaskId != null ? "tasks" : activeTab;
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [chartLoaded, setChartLoaded] = useState(false);
   const [pieReveal, setPieReveal] = useState(0);
-  const [tasks, setTasks] = useState<Task[]>([]);
 
-  // Fetch tasks from Express API on component mount
-    useEffect(() => {
-      const loadTasks = async () => {
-        try {
-          const token = localStorage.getItem("token");
+  // Dynamic Weekly Activity State
+  const [weeklyData, setWeeklyData] = useState<
+    { day: string; completed: number; ongoing: number; created: number }[]
+  >([
+    { day: "Mon", completed: 0, ongoing: 0, created: 0 },
+    { day: "Tue", completed: 0, ongoing: 0, created: 0 },
+    { day: "Wed", completed: 0, ongoing: 0, created: 0 },
+    { day: "Thu", completed: 0, ongoing: 0, created: 0 },
+    { day: "Fri", completed: 0, ongoing: 0, created: 0 },
+    { day: "Sat", completed: 0, ongoing: 0, created: 0 },
+    { day: "Sun", completed: 0, ongoing: 0, created: 0 },
+  ]);
 
-          const response = await fetch("/api/tasks", {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
+  // Dynamic Team Overview State
+  const [teamMembers, setTeamMembers] = useState<
+    { name: string; role: string; progress: string }[]
+  >([]);
 
-          if (!response.ok) {
-            throw new Error("Failed to fetch tasks");
-          }
+  // 2. DERIVED DATA FROM STATE
+  const dynamicRecentTasks = [...tasks]
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt || b.dueDate || 0).getTime() -
+        new Date(a.createdAt || a.dueDate || 0).getTime()
+    )
+    .slice(0, 3);
 
-          const result = await response.json();
+  const currentTab = highlightedTaskId != null ? "tasks" : activeTab;
 
-          setTasks(result.tasks);
-        } catch (error) {
-          console.error("Error loading tasks:", error);
+  // 3. FETCH ALL DASHBOARD DATA FROM EXPRESS BACKEND
+  useEffect(() => {
+    const loadTasks = async () => {
+      try {
+        const token = localStorage.getItem("token");
+
+        const response = await fetch("http://localhost:5000/api/tasks", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) throw new Error("Failed to fetch tasks");
+
+        const result = await response.json();
+        const taskData = Array.isArray(result) ? result : result.tasks || result.data || [];
+        setTasks(taskData);
+      } catch (error) {
+        console.error("Error loading tasks from database:", error);
+      }
+    };
+
+    const fetchWeeklyActivity = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch("http://localhost:5000/api/dashboard/weekly-activity", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) throw new Error("Failed to fetch activity");
+
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setWeeklyData(result.data);
         }
-      };
+      } catch (error) {
+        console.error("Error loading weekly activity:", error);
+      }
+    };
 
-      loadTasks();
-    }, []);
+    const fetchTeamOverview = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch("http://localhost:5000/api/dashboard/team-overview", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) throw new Error("Failed to fetch team overview");
+
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setTeamMembers(result.data);
+        }
+      } catch (error) {
+        console.error("Error loading team overview:", error);
+      }
+    };
+
+    loadTasks();
+    fetchWeeklyActivity();
+    fetchTeamOverview();
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -147,7 +178,7 @@ export default function Dashboard({
       }
     }, 20);
 
-    return () => window.clearInterval(interval);
+    return () => window.clearTimeout(interval);
   }, [chartLoaded]);
 
   const greeting =
@@ -173,40 +204,41 @@ export default function Dashboard({
   const pieCircumference = 2 * Math.PI * pieRadius;
   const pieProgress = pieReveal / 360;
 
-const handleCreateTaskSubmit = async (taskData: any) => {
-  try {
-    const token = localStorage.getItem("token");
+  const handleCreateTaskSubmit = async (taskData: any) => {
+    try {
+      const token = localStorage.getItem("token");
 
-    const response = await fetch("/api/tasks", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        title: taskData.title,
-        description: taskData.description,
-        status: taskData.status || "Pending",
-        priority: taskData.priority || "Medium",
-        dueDate: taskData.dueDate || null,
-        assignedTo: Number(taskData.assignTo),
-      }),
-    });
+      const response = await fetch("http://localhost:5000/api/tasks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: taskData.title,
+          description: taskData.description,
+          status: taskData.status || "Pending",
+          priority: taskData.priority || "Medium",
+          dueDate: taskData.dueDate || null,
+          assignedTo: Number(taskData.assignTo),
+        }),
+      });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || "Failed to create task");
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to create task");
+      }
+
+      const result = await response.json();
+      const newTask = result.task || result.data || result;
+
+      setTasks((prev) => [newTask, ...prev]);
+    } catch (error) {
+      console.error("Error creating task:", error);
+    } finally {
+      setIsNewTaskOpen(false);
     }
-
-    const result = await response.json();
-
-    setTasks((prev) => [result.task, ...prev]);
-  } catch (error) {
-    console.error("Error creating task:", error);
-  } finally {
-    setIsNewTaskOpen(false);
-  }
-};
+  };
 
   return (
     <div className="relative flex h-screen w-screen overflow-hidden bg-slate-50">
@@ -232,7 +264,6 @@ const handleCreateTaskSubmit = async (taskData: any) => {
         }`}
       >
         <div>
-          {/* HEADER / BRANDING & ALIGNED CLOSE BUTTON */}
           <div className="mb-6 flex items-start justify-between">
             <button
               type="button"
@@ -384,7 +415,7 @@ const handleCreateTaskSubmit = async (taskData: any) => {
         </div>
       </aside>
 
-      {/* DYNAMIC MAIN AREA */}
+      {/* MAIN CONTENT AREA */}
       <main
         className={`dashboard-main relative z-10 h-full flex-1 overflow-y-auto ${
           activeTab === "profile" ? "p-0" : "p-4 sm:p-6 lg:p-8 space-y-6"
@@ -462,7 +493,7 @@ const handleCreateTaskSubmit = async (taskData: any) => {
                 bg="bg-[#106fb8]/10"
               />
               <StatCard
-                value={tasks.filter((t) => t.status === "To Do").length.toString()}
+                value={tasks.filter((t) => t.status === "To Do" || t.status === "Pending").length.toString()}
                 title="To Do"
                 subtitle="Not yet started"
                 icon={<Clock className="h-5 w-5 text-amber-600" />}
@@ -486,6 +517,7 @@ const handleCreateTaskSubmit = async (taskData: any) => {
 
             {/* CHARTS */}
             <div className="grid gap-6 lg:grid-cols-3">
+              {/* WEEKLY ACTIVITY BAR CHART */}
               <section className="lg:col-span-2 rounded-3xl border border-white/80 bg-white/85 p-6 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.06)]">
                 <h2 className="text-xl font-semibold text-slate-900">
                   Weekly Activity
@@ -497,39 +529,46 @@ const handleCreateTaskSubmit = async (taskData: any) => {
                 {(() => {
                   const maxTotal = Math.max(
                     1,
-                    ...weeklyData.map((d: any) => d.completed + d.ongoing + d.created)
+                    ...weeklyData.map((d) => d.completed + d.ongoing + d.created)
                   );
 
                   return (
                     <>
                       <div className="mt-6 flex h-60 items-end justify-between gap-3 px-4 sm:gap-6">
-                        {weeklyData.map((item: any) => (
-                          <div
-                            key={item.day}
-                            className="group relative flex h-full flex-1 flex-col items-center justify-end"
-                          >
-                            <div className="absolute -top-14 opacity-0 transition-opacity group-hover:opacity-100 rounded-lg bg-white px-3 py-2 text-xs text-slate-800 shadow-md pointer-events-none w-36">
-                              <div className="font-semibold">{item.day}</div>
-                              <div className="mt-1 flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-500" /> <span className="text-[11px]">Completed: <strong className="ml-1">{item.completed}</strong></span></div>
-                              <div className="mt-1 flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-400" /> <span className="text-[11px]">Ongoing: <strong className="ml-1">{item.ongoing}</strong></span></div>
-                              <div className="mt-1 flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-sky-500" /> <span className="text-[11px]">Created: <strong className="ml-1">{item.created}</strong></span></div>
-                            </div>
+                        {weeklyData.map((item) => {
+                          const total = item.completed + item.ongoing + item.created;
+                          const heightPercent = maxTotal > 0 ? (total / maxTotal) * 100 : 0;
 
-                            <div className="flex h-full w-full max-w-9 items-end justify-center rounded-2xl bg-slate-100 p-1 transition-colors group-hover:bg-sky-100">
-                              <div
-                                className="w-full rounded-xl bg-linear-to-t from-[#106fb8] to-sky-400 shadow-xs"
-                                style={{
-                                  height: chartLoaded ? `${((item.completed + item.ongoing + item.created) / maxTotal) * 100}%` : "0%",
-                                  transition: "height 0.8s ease-out 150ms",
-                                  transformOrigin: "bottom",
-                                }}
-                              />
+                          return (
+                            <div
+                              key={item.day}
+                              className="group relative flex h-full flex-1 flex-col items-center justify-end"
+                            >
+                              {/* Hover Tooltip */}
+                              <div className="absolute -top-16 opacity-0 transition-opacity group-hover:opacity-100 rounded-lg bg-slate-900 px-3 py-2 text-xs text-white shadow-lg pointer-events-none z-10 w-36">
+                                <div className="font-semibold">{item.day}</div>
+                                <div className="mt-1 flex items-center justify-between"><span className="text-[11px] text-emerald-400">Completed:</span> <strong>{item.completed}</strong></div>
+                                <div className="flex items-center justify-between"><span className="text-[11px] text-amber-400">Ongoing:</span> <strong>{item.ongoing}</strong></div>
+                                <div className="flex items-center justify-between"><span className="text-[11px] text-sky-400">Created:</span> <strong>{item.created}</strong></div>
+                              </div>
+
+                              {/* Bar Pillar */}
+                              <div className="flex h-full w-full max-w-9 items-end justify-center rounded-2xl bg-slate-100 p-1 transition-colors group-hover:bg-sky-100">
+                                <div
+                                  className="w-full rounded-xl bg-linear-to-t from-[#106fb8] to-sky-400 shadow-xs"
+                                  style={{
+                                    height: chartLoaded ? `${heightPercent}%` : "0%",
+                                    transition: "height 0.8s ease-out 150ms",
+                                    transformOrigin: "bottom",
+                                  }}
+                                />
+                              </div>
+                              <span className="mt-3 text-xs font-medium text-slate-500">
+                                {item.day}
+                              </span>
                             </div>
-                            <span className="mt-3 text-xs font-medium text-slate-500">
-                              {item.day}
-                            </span>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
 
                       <div className="mt-4 flex items-center gap-4 px-4">
@@ -565,11 +604,14 @@ const handleCreateTaskSubmit = async (taskData: any) => {
                 <div className="my-6 flex flex-col items-center justify-around gap-6 sm:flex-row">
                   <div className="relative flex shrink-0 items-center justify-center">
                     {(() => {
+                      const getPriorityCount = (p: string) =>
+                        tasks.filter((t) => t.priority?.toLowerCase() === p.toLowerCase()).length;
+
                       const priorities = [
-                        { label: "Low", value: tasks.filter((t) => t.priority === "Low").length, color: "#94a3b8" },
-                        { label: "Medium", value: tasks.filter((t) => t.priority === "Medium").length, color: "#38bdf8" },
-                        { label: "High", value: tasks.filter((t) => t.priority === "High").length, color: "#106fb8" },
-                        { label: "Critical", value: tasks.filter((t) => t.priority === "Critical").length, color: "#f59e0b" },
+                        { label: "Low", value: getPriorityCount("Low"), color: "#94a3b8" },
+                        { label: "Medium", value: getPriorityCount("Medium"), color: "#38bdf8" },
+                        { label: "High", value: getPriorityCount("High"), color: "#106fb8" },
+                        { label: "Critical", value: getPriorityCount("Critical"), color: "#f59e0b" },
                       ];
 
                       const total = priorities.reduce((acc, p) => acc + p.value, 0) || 1;
@@ -633,7 +675,7 @@ const handleCreateTaskSubmit = async (taskData: any) => {
                         <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
                         <span className="font-medium text-slate-600">Low</span>
                       </div>
-                      <span className="font-semibold text-slate-800">{tasks.filter((t) => t.priority === "Low").length}</span>
+                      <span className="font-semibold text-slate-800">{tasks.filter((t) => t.priority?.toLowerCase() === "low").length}</span>
                     </div>
 
                     <div className="flex items-center justify-between rounded-xl bg-slate-50/80 px-3 py-1.5 text-xs border border-slate-100">
@@ -641,7 +683,7 @@ const handleCreateTaskSubmit = async (taskData: any) => {
                         <span className="h-2.5 w-2.5 rounded-full bg-sky-400" />
                         <span className="font-medium text-slate-600">Medium</span>
                       </div>
-                      <span className="font-semibold text-slate-800">{tasks.filter((t) => t.priority === "Medium").length}</span>
+                      <span className="font-semibold text-slate-800">{tasks.filter((t) => t.priority?.toLowerCase() === "medium").length}</span>
                     </div>
 
                     <div className="flex items-center justify-between rounded-xl bg-slate-50/80 px-3 py-1.5 text-xs border border-slate-100">
@@ -649,7 +691,7 @@ const handleCreateTaskSubmit = async (taskData: any) => {
                         <span className="h-2.5 w-2.5 rounded-full bg-[#106fb8]" />
                         <span className="font-medium text-slate-600">High</span>
                       </div>
-                      <span className="font-semibold text-slate-800">{tasks.filter((t) => t.priority === "High").length}</span>
+                      <span className="font-semibold text-slate-800">{tasks.filter((t) => t.priority?.toLowerCase() === "high").length}</span>
                     </div>
 
                     <div className="flex items-center justify-between rounded-xl bg-slate-50/80 px-3 py-1.5 text-xs border border-slate-100">
@@ -657,7 +699,7 @@ const handleCreateTaskSubmit = async (taskData: any) => {
                         <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
                         <span className="font-medium text-slate-600">Critical</span>
                       </div>
-                      <span className="font-semibold text-slate-800">{tasks.filter((t) => t.priority === "Critical").length}</span>
+                      <span className="font-semibold text-slate-800">{tasks.filter((t) => t.priority?.toLowerCase() === "critical").length}</span>
                     </div>
                   </div>
                 </div>
@@ -685,17 +727,22 @@ const handleCreateTaskSubmit = async (taskData: any) => {
                 </div>
 
                 <div className="space-y-3">
-                  {recentTasks.map((task) => (
-                    <TaskItem
-                      key={task.id}
-                      title={task.title}
-                      date={task.date}
-                      status={task.status}
-                    />
-                  ))}
+                  {dynamicRecentTasks.length > 0 ? (
+                    dynamicRecentTasks.map((task) => (
+                      <TaskItem
+                        key={task.id}
+                        title={task.title}
+                        date={task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No date"}
+                        status={task.status}
+                      />
+                    ))
+                  ) : (
+                    <p className="py-4 text-center text-xs text-slate-400">No tasks found.</p>
+                  )}
                 </div>
               </section>
 
+              {/* DYNAMIC TEAM OVERVIEW */}
               <section className="flex h-full flex-col rounded-3xl border border-white/80 bg-white/85 p-6 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.06)]">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
@@ -707,32 +754,36 @@ const handleCreateTaskSubmit = async (taskData: any) => {
                     </p>
                   </div>
                   <div className="rounded-full bg-[#106fb8]/10 px-3 py-1 text-xs font-semibold text-[#106fb8]">
-                    4 members
+                    {teamMembers.length} members
                   </div>
                 </div>
 
                 <div className="space-y-4">
-                  {teamMembers.map((member) => (
-                    <div key={member.name} className="space-y-1.5">
-                      <div className="flex justify-between text-xs font-semibold">
-                        <span className="text-slate-800">
-                          {member.name}{" "}
-                          <span className="font-normal text-slate-400">
-                            ({member.role})
+                  {teamMembers.length > 0 ? (
+                    teamMembers.map((member) => (
+                      <div key={member.name} className="space-y-1.5">
+                        <div className="flex justify-between text-xs font-semibold">
+                          <span className="text-slate-800">
+                            {member.name}{" "}
+                            <span className="font-normal text-slate-400">
+                              ({member.role})
+                            </span>
                           </span>
-                        </span>
-                        <span className="text-[#106fb8]">
-                          {member.progress}
-                        </span>
+                          <span className="text-[#106fb8]">{member.progress}</span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 p-0.5">
+                          <div
+                            className="h-full rounded-full bg-[#106fb8] transition-all duration-500"
+                            style={{ width: member.progress }}
+                          />
+                        </div>
                       </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 p-0.5">
-                        <div
-                          className="h-full rounded-full bg-[#106fb8] transition-all duration-500"
-                          style={{ width: member.progress }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <p className="py-4 text-center text-xs text-slate-400">
+                      No team members found in database.
+                    </p>
+                  )}
                 </div>
               </section>
             </div>

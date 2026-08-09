@@ -64,14 +64,6 @@ export default function NewTaskModal({
         const result = await response.json();
 
         setUsers(result.users);
-
-        // Select the first user by default
-        if (result.users.length > 0) {
-          setFormData((prev) => ({
-            ...prev,
-            assignTo: String(result.users[0].id),
-          }));
-        }
       } catch (error) {
         console.error("Error loading users:", error);
       }
@@ -114,11 +106,6 @@ export default function NewTaskModal({
       return;
     }
 
-    if (!formData.assignTo) {
-      alert("Please select a user.");
-      return;
-    }
-
     onSubmit({
       ...formData,
       status: "Pending",
@@ -127,10 +114,12 @@ export default function NewTaskModal({
     setFormData({
       title: "",
       description: "",
-      assignTo: users.length > 0 ? String(users[0].id) : "",
+      assignTo: "",
       dueDate: "",
       priority: "Medium",
     });
+
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -252,9 +241,7 @@ export default function NewTaskModal({
           </div>
 
           {/* Row 1: Assign To & Priority */}
-{/* Row 1 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-
             <div className="group">
               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
                 Assign To
@@ -270,6 +257,8 @@ export default function NewTaskModal({
                 }
                 className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs"
               >
+                <option value="">Open for Anyone</option>
+
                 {users.map((user) => (
                   <option key={user.id} value={user.id}>
                     {user.name}
@@ -279,7 +268,6 @@ export default function NewTaskModal({
             </div>
 
             {renderCustomSelect("Priority", "priority", priorityOptions)}
-
           </div>
 
           {/* Row 2: Due Date */}

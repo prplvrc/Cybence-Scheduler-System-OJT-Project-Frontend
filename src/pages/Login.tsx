@@ -120,14 +120,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             {/* Username */}
             <div>
               <label htmlFor="username" className="mb-1 block text-xs font-semibold text-slate-700">
-                Username
+                Email
               </label>
               <div className="group relative flex items-center">
                 <User className="absolute left-3.5 h-4 w-4 text-slate-400 pointer-events-none transition-colors group-focus-within:text-[#106fb8]" />
                 <input
                   id="username"
                   type="text"
-                  placeholder="Username"
+                  placeholder="Email"
                   autoComplete="username"
                   value={email}
                   onChange={(e) => {
