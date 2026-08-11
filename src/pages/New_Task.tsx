@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { X, ChevronDown, Calendar, Check } from "lucide-react";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 export interface NewTaskFormData {
   title: string;
   description: string;
@@ -51,7 +53,7 @@ export default function NewTaskModal({
       try {
         const token = localStorage.getItem("token");
 
-        const response = await fetch("https://schedulers-backend-api.cybenceitsolutions.com/api/users", {
+        const response = await fetch(`${API_BASE_URL}/users`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },

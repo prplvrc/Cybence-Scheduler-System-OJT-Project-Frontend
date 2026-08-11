@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://schedulers-backend-api.cybenceitsolutions.com/api/$1"
+    }
+  ]
+}

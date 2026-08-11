@@ -214,7 +214,7 @@ export default function Dashboard({
     try {
       const token = localStorage.getItem("token");
 
-      const response = await fetch("http://localhost:5000/api/tasks", {
+      const response = await fetch(`${API_BASE_URL}/tasks`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
