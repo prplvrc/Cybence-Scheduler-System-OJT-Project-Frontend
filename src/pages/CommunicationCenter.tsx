@@ -103,6 +103,8 @@ export default function CommunicationCenter({
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [localReplies, setLocalReplies] = useState<Record<string, AppMessage[]>>({});
 
+  void onMarkRead;
+
   const inbox = messages.filter(
     (m) => m.recipientId === currentUser.id && m.type === "message"
   );
@@ -150,12 +152,6 @@ export default function CommunicationCenter({
     : conversations[0] ?? null;
 
   const selectedSender = selectedConversation?.sender ?? null;
-
-  React.useEffect(() => {
-    if (tab === "inbox" && !selectedConversationId && conversations.length > 0) {
-      setSelectedConversationId(conversations[0].sender.id);
-    }
-  }, [tab, conversations, selectedConversationId]);
 
   const MessageRow = ({ msg }: { msg: AppMessage }) => {
     const sender = getUserById(msg.senderId);
@@ -255,8 +251,10 @@ export default function CommunicationCenter({
     e.preventDefault();
     if (!selectedConversation || !replyContent.trim()) return;
 
+    const nextReplyIndex = (localReplies[selectedConversation.sender.id] ?? []).length + 1;
+
     const replyMessage: AppMessage = {
-      id: `reply-${selectedConversation.sender.id}-${Date.now()}`,
+      id: `reply-${selectedConversation.sender.id}-${nextReplyIndex}`,
       senderId: currentUser.id,
       recipientId: selectedConversation.sender.id,
       type: "message",
@@ -282,7 +280,7 @@ export default function CommunicationCenter({
         className="absolute inset-0 bg-black/30 backdrop-blur-xs"
         onClick={onClose}
       />
-      <div className="relative bg-white w-full max-w-[1180px] h-[94vh] rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-slate-900/20 flex flex-col z-10 overflow-hidden">
+      <div className="relative bg-white w-full max-w-295 h-[94vh] rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-slate-900/20 flex flex-col z-10 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
           <h2 className="font-semibold text-slate-800 flex items-center gap-2">
@@ -370,7 +368,7 @@ export default function CommunicationCenter({
         <div className="flex-1 overflow-hidden p-3" style={{ scrollbarWidth: "thin" }}>
           {tab === "inbox" && (
             <div className="flex h-full min-h-0 flex-col gap-4 xl:flex-row xl:items-stretch">
-              <div className="flex min-h-0 flex-col rounded-3xl border border-slate-200 bg-slate-50 overflow-hidden xl:w-[340px] xl:min-h-full">
+              <div className="flex min-h-0 flex-col rounded-3xl border border-slate-200 bg-slate-50 overflow-hidden xl:w-85 xl:min-h-full">
                 <div className="px-4 py-3 border-b border-slate-200 bg-white">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                     Conversations
@@ -452,8 +450,8 @@ export default function CommunicationCenter({
                               className={cn(
                                 "inline-block max-w-[70%] rounded-[20px] p-3 text-sm",
                                 message.senderId === currentUser.id
-                                  ? "self-end bg-[#106fb8] text-white rounded-tr-[4px] rounded-bl-[20px] rounded-br-[20px]"
-                                  : "self-start bg-slate-100 text-slate-700 rounded-tl-[4px] rounded-br-[20px] rounded-bl-[20px]"
+                                  ? "self-end bg-[#106fb8] text-white rounded-tr-sm rounded-bl-[20px] rounded-br-[20px]"
+                                    : "self-start bg-slate-100 text-slate-700 rounded-tl-sm rounded-br-[20px] rounded-bl-[20px]"
                               )}
                             >
                               {message.content}
@@ -465,7 +463,7 @@ export default function CommunicationCenter({
                         ))}
                         {(localReplies[selectedConversation.sender.id] ?? []).map((message) => (
                           <div key={message.id} className="flex flex-col self-end">
-                            <div className="inline-block max-w-[70%] rounded-[20px] bg-[#106fb8] p-3 text-sm text-white rounded-tr-[4px] rounded-bl-[20px] rounded-br-[20px]">
+                            <div className="inline-block max-w-[70%] rounded-[20px] bg-[#106fb8] p-3 text-sm text-white rounded-tr-sm rounded-bl-[20px] rounded-br-[20px]">
                               {message.content}
                             </div>
                             <span className="mt-1 text-[10px] text-slate-400 self-end">
@@ -505,7 +503,7 @@ export default function CommunicationCenter({
                     </div>
                   </>
                 ) : (
-                  <div className="flex h-full min-h-[200px] items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                  <div className="flex h-full min-h-50 items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
                     Select a conversation from the left to view the messages.
                   </div>
                 )}

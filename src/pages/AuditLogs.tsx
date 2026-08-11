@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Clock, FileText, ChevronDown, User } from "lucide-react";
+import { FileText, ChevronDown } from "lucide-react";
 
 export type AuditEntry = {
   id: string;
@@ -71,7 +71,7 @@ export default function AuditLogs({ logs }: AuditLogsProps) {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm">
         <div className="hidden grid-cols-[190px_200px_140px_120px_1fr] gap-4 border-b border-slate-200 px-5 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 lg:grid">
           <span>TIMESTAMP</span>
           <span>USER</span>
@@ -88,7 +88,7 @@ export default function AuditLogs({ logs }: AuditLogsProps) {
           <div className="divide-y divide-slate-200">
             {filteredLogs.map((log) => (
               <div key={log.id} className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-4 lg:flex-row lg:items-center lg:gap-0">
-                <div className="lg:w-[190px]">
+                <div className="lg:w-47.5">
                   <p className="text-sm font-semibold text-slate-900">
                     {new Date(log.timestamp).toLocaleString("en-US", {
                       month: "short",
@@ -104,7 +104,7 @@ export default function AuditLogs({ logs }: AuditLogsProps) {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-3 lg:w-[200px]">
+                <div className="flex items-center gap-3 lg:w-50">
                   <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#106fb8]/10 text-sm font-bold text-[#106fb8]">
                     {log.user
                       .split(" ")
@@ -118,13 +118,13 @@ export default function AuditLogs({ logs }: AuditLogsProps) {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 lg:w-[140px]">
+                <div className="flex items-center gap-2 lg:w-35">
                   <span className="rounded-full bg-blue-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#106fb8]">
                     {log.action}
                   </span>
                 </div>
 
-                <div className="lg:w-[120px]">
+                <div className="lg:w-30">
                   <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
                     {log.entity}
                   </span>

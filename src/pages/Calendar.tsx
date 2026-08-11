@@ -44,6 +44,8 @@ export default function Calendar({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string>("All");
 
+  void onTasksChange;
+
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth();
 

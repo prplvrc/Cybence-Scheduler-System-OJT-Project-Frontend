@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -61,7 +61,7 @@ type TaskBoardProps = {
   highlightTaskId?: number | null;
   onHighlightHandled?: () => void;
   currentUser?: {
-    id: number;
+    id: string | number;
     name: string;
     role?: string;
   };
@@ -168,6 +168,12 @@ export default function TaskBoard({
   // Prevent double submissions
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Store the latest callback in a ref to avoid stale closure issues without rerunning the fetch effect
+  const onTasksChangeRef = useRef(onTasksChange);
+  useEffect(() => {
+    onTasksChangeRef.current = onTasksChange;
+  }, [onTasksChange]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -175,7 +181,7 @@ export default function TaskBoard({
       try {
         const response = await getTasks();
         if (isMounted) {
-          onTasksChange(response.tasks || []);
+          onTasksChangeRef.current(response.tasks || []);
         }
       } catch (error) {
         console.error("Error loading tasks:", error);
@@ -317,9 +323,16 @@ export default function TaskBoard({
       return;
     }
 
+    const currentUserId = Number(currentUser.id);
+
+    if (!Number.isFinite(currentUserId)) {
+      alert("Your user account is missing a valid numeric ID.");
+      return;
+    }
+
     try {
       await updateTask(taskId, {
-        assignedTo: currentUser.id,
+        assignedTo: currentUserId,
         status: "To Do"
       });
 
