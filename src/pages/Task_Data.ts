@@ -1,6 +1,6 @@
 import type { TaskGroup } from "./Task_Board";
 
-export const initialTaskGroups: TaskGroup[] = [
+export const initialTaskGroups = [
   {
     title: "To Be Assigned",
     dotClass: "dot-pending",
@@ -136,4 +136,4 @@ export const initialTaskGroups: TaskGroup[] = [
       },
     ],
   },
-];
+] as unknown as TaskGroup[];

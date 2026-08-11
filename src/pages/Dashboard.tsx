@@ -23,6 +23,7 @@ import RequestsPage from "./Requests";
 import SettingsPage from "./Settings";
 import AuditLogs from "./AuditLogs";
 import NewTaskModal from "./New_Task";
+import type { NewTaskFormData } from "./New_Task";
 import { type Task } from "./Task_Board";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -68,6 +69,12 @@ export default function Dashboard({
   const [teamMembers, setTeamMembers] = useState<
     { name: string; role: string; progress: string }[]
   >([]);
+
+  const switchTab = (tab: "dashboard" | "tasks" | "calendar" | "requests" | "settings" | "profile" | "audit") => {
+    setActiveTab(tab);
+    setChartLoaded(false);
+    setPieReveal(0);
+  };
 
   // 2. DERIVED DATA FROM STATE
   const dynamicRecentTasks = [...tasks]
@@ -154,18 +161,15 @@ export default function Dashboard({
 
   useEffect(() => {
     if (activeTab !== "dashboard") {
-      setChartLoaded(false);
       return;
     }
 
-    setChartLoaded(false);
     const timeout = window.setTimeout(() => setChartLoaded(true), 150);
     return () => window.clearTimeout(timeout);
   }, [activeTab]);
 
   useEffect(() => {
     if (!chartLoaded) {
-      setPieReveal(0);
       return;
     }
 
@@ -180,7 +184,7 @@ export default function Dashboard({
       }
     }, 20);
 
-    return () => window.clearTimeout(interval);
+    return () => window.clearInterval(interval);
   }, [chartLoaded]);
 
   const greeting =
@@ -206,7 +210,7 @@ export default function Dashboard({
   const pieCircumference = 2 * Math.PI * pieRadius;
   const pieProgress = pieReveal / 360;
 
-  const handleCreateTaskSubmit = async (taskData: any) => {
+  const handleCreateTaskSubmit = async (taskData: NewTaskFormData) => {
     try {
       const token = localStorage.getItem("token");
 
@@ -270,7 +274,7 @@ export default function Dashboard({
             <button
               type="button"
               onClick={() => {
-                setActiveTab("dashboard");
+                switchTab("dashboard");
                 setIsMobileMenuOpen(false);
               }}
               className="flex items-center gap-2.5 rounded-xl px-2 py-1 text-left transition-colors hover:bg-slate-100/80 cursor-pointer"
@@ -310,7 +314,7 @@ export default function Dashboard({
                   label="Dashboard"
                   active={currentTab === "dashboard"}
                   onClick={() => {
-                    setActiveTab("dashboard");
+                    switchTab("dashboard");
                     setIsMobileMenuOpen(false);
                   }}
                 />
@@ -319,7 +323,7 @@ export default function Dashboard({
                   label="Task"
                   active={currentTab === "tasks"}
                   onClick={() => {
-                    setActiveTab("tasks");
+                    switchTab("tasks");
                     setIsMobileMenuOpen(false);
                   }}
                 />
@@ -328,7 +332,7 @@ export default function Dashboard({
                   label="Calendar"
                   active={currentTab === "calendar"}
                   onClick={() => {
-                    setActiveTab("calendar");
+                    switchTab("calendar");
                     setIsMobileMenuOpen(false);
                   }}
                 />
@@ -337,7 +341,7 @@ export default function Dashboard({
                   label="Requests"
                   active={currentTab === "requests"}
                   onClick={() => {
-                    setActiveTab("requests");
+                    switchTab("requests");
                     setIsMobileMenuOpen(false);
                   }}
                 />
@@ -354,7 +358,7 @@ export default function Dashboard({
                   label="Settings"
                   active={currentTab === "settings"}
                   onClick={() => {
-                    setActiveTab("settings");
+                    switchTab("settings");
                     setIsMobileMenuOpen(false);
                   }}
                 />
@@ -363,7 +367,7 @@ export default function Dashboard({
                   label="Profile"
                   active={currentTab === "profile"}
                   onClick={() => {
-                    setActiveTab("profile");
+                    switchTab("profile");
                     setIsMobileMenuOpen(false);
                   }}
                 />
@@ -373,7 +377,7 @@ export default function Dashboard({
                     label="Audit Logs"
                     active={currentTab === "audit"}
                     onClick={() => {
-                      setActiveTab("audit");
+                      switchTab("audit");
                       setIsMobileMenuOpen(false);
                     }}
                   />
@@ -395,7 +399,7 @@ export default function Dashboard({
         {/* User Card */}
         <div
           onClick={() => {
-            setActiveTab("profile");
+            switchTab("profile");
             setIsMobileMenuOpen(false);
           }}
           className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 transition-colors hover:bg-slate-100/80"
@@ -603,7 +607,7 @@ export default function Dashboard({
                   </p>
                 </div>
 
-                <div className="my-6 flex flex-col items-center justify-around gap-6 sm:flex-row">
+                <div className="my-6 flex flex-col items-center justify-center gap-6 sm:flex-row lg:gap-8">
                   <div className="relative flex shrink-0 items-center justify-center">
                     {(() => {
                       const getPriorityCount = (p: string) =>
@@ -671,13 +675,15 @@ export default function Dashboard({
                     </div>
                   </div>
 
-                  <div className="flex w-full max-w-[180px] flex-col gap-2.5">
+                  <div className="flex w-full max-w-sm shrink flex-col gap-2.5 sm:w-auto sm:flex-1">
                     <div className="flex items-center justify-between rounded-xl bg-slate-50/80 px-3 py-1.5 text-xs border border-slate-100">
                       <div className="flex items-center gap-2.5">
                         <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
                         <span className="font-medium text-slate-600">Low</span>
                       </div>
-                      <span className="font-semibold text-slate-800">{tasks.filter((t) => t.priority?.toLowerCase() === "low").length}</span>
+                      <span className="font-semibold text-slate-800">
+                        {tasks.filter((t) => t.priority?.toLowerCase() === "low").length}
+                      </span>
                     </div>
 
                     <div className="flex items-center justify-between rounded-xl bg-slate-50/80 px-3 py-1.5 text-xs border border-slate-100">
@@ -685,7 +691,9 @@ export default function Dashboard({
                         <span className="h-2.5 w-2.5 rounded-full bg-sky-400" />
                         <span className="font-medium text-slate-600">Medium</span>
                       </div>
-                      <span className="font-semibold text-slate-800">{tasks.filter((t) => t.priority?.toLowerCase() === "medium").length}</span>
+                      <span className="font-semibold text-slate-800">
+                        {tasks.filter((t) => t.priority?.toLowerCase() === "medium").length}
+                      </span>
                     </div>
 
                     <div className="flex items-center justify-between rounded-xl bg-slate-50/80 px-3 py-1.5 text-xs border border-slate-100">
@@ -693,7 +701,9 @@ export default function Dashboard({
                         <span className="h-2.5 w-2.5 rounded-full bg-[#106fb8]" />
                         <span className="font-medium text-slate-600">High</span>
                       </div>
-                      <span className="font-semibold text-slate-800">{tasks.filter((t) => t.priority?.toLowerCase() === "high").length}</span>
+                      <span className="font-semibold text-slate-800">
+                        {tasks.filter((t) => t.priority?.toLowerCase() === "high").length}
+                      </span>
                     </div>
 
                     <div className="flex items-center justify-between rounded-xl bg-slate-50/80 px-3 py-1.5 text-xs border border-slate-100">
@@ -701,7 +711,9 @@ export default function Dashboard({
                         <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
                         <span className="font-medium text-slate-600">Critical</span>
                       </div>
-                      <span className="font-semibold text-slate-800">{tasks.filter((t) => t.priority?.toLowerCase() === "critical").length}</span>
+                      <span className="font-semibold text-slate-800">
+                        {tasks.filter((t) => t.priority?.toLowerCase() === "critical").length}
+                      </span>
                     </div>
                   </div>
                 </div>
