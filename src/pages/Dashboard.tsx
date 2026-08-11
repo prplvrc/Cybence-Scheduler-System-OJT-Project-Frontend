@@ -25,6 +25,8 @@ import AuditLogs from "./AuditLogs";
 import NewTaskModal from "./New_Task";
 import { type Task } from "./Task_Board";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 type DashboardProps = {
   onLogout: () => void;
   highlightedTaskId?: number | null;
@@ -84,7 +86,7 @@ export default function Dashboard({
       try {
         const token = localStorage.getItem("token");
 
-        const response = await fetch("http://localhost:5000/api/tasks", {
+        const response = await fetch(`${API_BASE_URL}/tasks`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -103,7 +105,7 @@ export default function Dashboard({
     const fetchWeeklyActivity = async () => {
       try {
         const token = localStorage.getItem("token");
-        const response = await fetch("http://localhost:5000/api/dashboard/weekly-activity", {
+        const response = await fetch(`${API_BASE_URL}/dashboard/weekly-activity`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -123,7 +125,7 @@ export default function Dashboard({
     const fetchTeamOverview = async () => {
       try {
         const token = localStorage.getItem("token");
-        const response = await fetch("http://localhost:5000/api/dashboard/team-overview", {
+        const response = await fetch(`${API_BASE_URL}/dashboard/team-overview`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },

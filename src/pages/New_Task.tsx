@@ -51,7 +51,7 @@ export default function NewTaskModal({
       try {
         const token = localStorage.getItem("token");
 
-        const response = await fetch("/api/users", {
+        const response = await fetch("https://schedulers-backend-api.cybenceitsolutions.com/api/users", {
           headers: {
             Authorization: `Bearer ${token}`,
           },
